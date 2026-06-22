@@ -1,19 +1,26 @@
 import { useMemo, useState } from 'react';
 import type {
+  DivergenceFramePayload,
+  DivergenceParams,
   Frame,
   GridFramePayload,
   GridParams,
   LaunchConfig,
+  MemoryFramePayload,
+  MemoryParams,
   ViewKind,
   ViewParams,
 } from './types';
 import { useStepController } from './useStepController';
 import { generateGridFrames } from './model/gridFrames';
+import { generateDivergenceFrames } from './model/divergence';
+import { generateMemoryFrames } from './model/memory';
 import { LaunchConfigPanel } from './components/LaunchConfigPanel';
 import { ViewTabs } from './components/ViewTabs';
 import { StepControls } from './components/StepControls';
 import { GridView } from './views/GridView';
-import { ViewStub } from './views/ViewStub';
+import { DivergenceView } from './views/DivergenceView';
+import { MemoryView } from './views/MemoryView';
 
 const DEFAULT_CONFIG: LaunchConfig = {
   gridDim: { x: 2, y: 1 },
@@ -28,16 +35,6 @@ const DEFAULT_PARAMS: ViewParams = {
   memory: { pattern: 'coalesced', stride: 2, base: 0, seed: 1 },
 };
 
-/** Dummy frames for views not yet implemented (divergence, memory). */
-function dummyFrames(view: ViewKind): Frame<unknown>[] {
-  const labels: Record<ViewKind, string[]> = {
-    grid: [],
-    divergence: ['evaluate', 'then-pass', 'else-pass', 'reconverge'],
-    memory: ['issue addresses', 'coalesce into segments'],
-  };
-  return labels[view].map((label, index) => ({ index, label, payload: null }));
-}
-
 export default function App() {
   const [config, setConfig] = useState<LaunchConfig>(DEFAULT_CONFIG);
   const [activeView, setActiveView] = useState<ViewKind>('grid');
@@ -45,11 +42,16 @@ export default function App() {
 
   const setGridParams = (p: GridParams) =>
     setViewParams((prev) => ({ ...prev, grid: p }));
+  const setDivergenceParams = (p: DivergenceParams) =>
+    setViewParams((prev) => ({ ...prev, divergence: p }));
+  const setMemoryParams = (p: MemoryParams) =>
+    setViewParams((prev) => ({ ...prev, memory: p }));
 
   const frames = useMemo<Frame<unknown>[]>(() => {
     if (activeView === 'grid') return generateGridFrames(config, viewParams.grid);
-    return dummyFrames(activeView);
-  }, [activeView, config, viewParams.grid]);
+    if (activeView === 'divergence') return generateDivergenceFrames(viewParams.divergence);
+    return generateMemoryFrames(config, viewParams.memory);
+  }, [activeView, config, viewParams.grid, viewParams.divergence, viewParams.memory]);
 
   const step = useStepController(frames.length);
   const frame = frames[Math.min(step.index, frames.length - 1)];
@@ -80,17 +82,18 @@ export default function App() {
             />
           )}
           {activeView === 'divergence' && frame && (
-            <ViewStub
-              name="Warp Divergence"
-              frame={frame}
-              note="Will animate 32 lanes serialising through then/else passes with a passes + efficiency cost indicator."
+            <DivergenceView
+              payload={frame.payload as DivergenceFramePayload}
+              params={viewParams.divergence}
+              onParamsChange={setDivergenceParams}
             />
           )}
           {activeView === 'memory' && frame && (
-            <ViewStub
-              name="Memory Access"
-              frame={frame}
-              note="Will coalesce 32 addresses into distinct segments and count transactions."
+            <MemoryView
+              payload={frame.payload as MemoryFramePayload}
+              cfg={config}
+              params={viewParams.memory}
+              onParamsChange={setMemoryParams}
             />
           )}
 

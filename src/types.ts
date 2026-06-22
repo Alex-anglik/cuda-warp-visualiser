@@ -106,10 +106,12 @@ export type DivPhase = 'evaluate' | 'then' | 'else' | 'reconverge';
 
 export interface DivergenceFramePayload {
   phase: DivPhase;
+  phases: DivPhase[]; // ordered sequence that actually occurs — for the timeline
   laneActive: boolean[]; // length 32; which lanes execute THIS frame
-  passesRequired: number; // 0 | 1 | 2
-  activeCount: number;
-  efficiency: number; // Σ active over passes / (32 * passes)
+  passesRequired: number; // 0 | 1 | 2 — distinct non-empty bodies in THIS warp
+  activeCount: number; // lanes active in the current frame
+  efficiency: number; // Σ active over executed passes / (32 * passes)
+  divergent: boolean; // some lanes take then AND some take else
 }
 
 export interface LaneAccess {
