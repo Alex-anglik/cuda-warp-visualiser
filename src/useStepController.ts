@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface StepController {
   index: number;
@@ -21,11 +21,14 @@ export function useStepController(frameCount: number, speedMs = 700): StepContro
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  // Clamp + reset when the frame set changes (e.g. config edit).
-  useEffect(() => {
+  // Reset when the frame set changes (e.g. config edit). Adjusting state during
+  // render — React's recommended pattern — rather than in an effect.
+  const [prevCount, setPrevCount] = useState(frameCount);
+  if (frameCount !== prevCount) {
+    setPrevCount(frameCount);
     setIndex(0);
     setPlaying(false);
-  }, [frameCount]);
+  }
 
   const last = frameCount - 1;
 
@@ -37,19 +40,19 @@ export function useStepController(frameCount: number, speedMs = 700): StepContro
     (i: number) => setIndex(Math.max(0, Math.min(i, last))),
     [last],
   );
-  const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+  const togglePlay = useCallback(() => {
+    // Pressing play at the end restarts from the beginning.
+    if (!playing && index >= last) setIndex(0);
+    setPlaying((p) => !p);
+  }, [playing, index, last]);
 
-  // Play loop: advance on a timer, stop at the end.
-  const playingRef = useRef(playing);
-  playingRef.current = playing;
+  // Play loop: advance on a timer, stopping at the end. setState happens only in
+  // the async callback, never synchronously in the effect body.
   useEffect(() => {
-    if (!playing) return;
-    if (index >= last) {
-      setPlaying(false);
-      return;
-    }
+    if (!playing || index >= last) return;
     const t = setTimeout(() => {
-      if (playingRef.current) setIndex((i) => Math.min(i + 1, last));
+      setIndex((i) => Math.min(i + 1, last));
+      if (index + 1 >= last) setPlaying(false);
     }, speedMs);
     return () => clearTimeout(t);
   }, [playing, index, last, speedMs]);
